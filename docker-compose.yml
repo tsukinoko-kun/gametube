@@ -1,0 +1,7 @@
+services:
+  gametube:
+    build: .
+    ports:
+      - "4321:80"
+    volumes:
+      - /Users/frank/Git/mageanoid/pack:/game
