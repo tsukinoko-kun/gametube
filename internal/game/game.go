@@ -3,6 +3,7 @@ package game
 import (
 	"errors"
 	"fmt"
+	"github.com/charmbracelet/log"
 	"os/exec"
 	"syscall"
 	"time"
@@ -26,7 +27,7 @@ func (g *Game) Start() error {
 func (g *Game) Stop() error {
 	// is the process still running?
 	if g.cmd.Process == nil {
-		fmt.Println("process is not running anymore")
+		log.Info("process is not running anymore")
 		return nil
 	}
 
@@ -41,17 +42,34 @@ func (g *Game) Stop() error {
 		// wait for the process to exit with a timeout of 5 seconds
 		done := make(chan error, 1)
 		go func() {
-			done <- g.cmd.Wait()
+			if g.cmd.Process == nil || g.cmd.ProcessState != nil {
+				done <- nil
+				return
+			}
+			state, err := g.cmd.Process.Wait()
+			if err != nil {
+				done <- err
+				return
+			}
+			if state.Exited() {
+				done <- nil
+				return
+			}
 		}()
 
 		select {
 		case err := <-done:
+			if err == nil {
+				log.Info("process exited successfully")
+				return nil
+			}
 			return errors.Join(errors.New("failed to wait for process to exit"), err)
-		case <-time.After(5 * time.Second):
+		case <-time.After(2 * time.Second):
 			continue
 		}
 	}
 
 	// kill
+	log.Warn("killing game process")
 	return g.cmd.Process.Kill()
 }

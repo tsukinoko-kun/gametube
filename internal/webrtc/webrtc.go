@@ -77,7 +77,7 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) er
 		if c == nil {
 			return
 		}
-		log.Info("new ICE candidate")
+		log.Debug("new ICE candidate")
 		onICECandidate(AnswerCandidate(c.ToJSON()))
 	})
 

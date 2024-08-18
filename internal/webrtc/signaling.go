@@ -21,13 +21,13 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func(conn *websocket.Conn) {
 		err := conn.Close()
-		log.Info("WebSocket connection closed")
+		log.Debug("WebSocket connection closed")
 		if err != nil {
 			log.Error("failed to close connection", "err", err)
 		}
 	}(conn)
 
-	log.Info("WebSocket connection established")
+	log.Debug("WebSocket connection established")
 
 	if err := InitializePeerConnection(func(c AnswerCandidate) {
 		response, err := json.Marshal(c)
@@ -59,7 +59,7 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 
 		switch t {
 		case MessageTypeOffer:
-			log.Info("received offer")
+			log.Debug("received offer")
 			answer, err := HandleOffer(offer)
 			if err != nil {
 				log.Error("failed to handle offer", "err", err)
@@ -82,7 +82,7 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case MessageTypeCandidate:
-			log.Info("received ICE candidate")
+			log.Debug("received ICE candidate")
 			if err := HandleCandidate(candidate); err != nil {
 				log.Error("failed to handle ICE candidate", "err", err)
 				return
