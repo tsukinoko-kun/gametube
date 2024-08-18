@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # Start virtual framebuffer
+rm /tmp/.X99-lock > /dev/null 2>&1
 Xvfb :99 -screen 0 "${RESOLUTION}x${COLOR_DEPTH}" &
 
 # Wait for Xvfb to be ready
@@ -14,4 +15,4 @@ openbox-session &
 sleep 1
 
 # Start your Rust application
-/gametube/target/release/gametube /game/mageanoid
+/gametube/host /game/mageanoid

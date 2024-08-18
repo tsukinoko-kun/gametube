@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>gametube</title>
+</head>
+<body>
+<video autoplay id="remoteVideo"></video>
+<script>
+    const MessageType = {
+        unknown: 0,
+        offer: 1,
+        candidate: 2,
+    };
+
+    const configuration = {
+        iceServers: [
+            {
+                urls: [
+                    "stun:stun1.l.google.com:19302",
+                    "stun:stun2.l.google.com:19302",
+                ],
+            },
+        ],
+        iceCandidatePoolSize: 10,
+    };
+    const pc = new RTCPeerConnection(configuration);
+
+    const wsUrl = new URL(window.location.href);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    wsUrl.pathname = "/ws";
+    wsUrl.hash = "";
+    wsUrl.search = "";
+    const ws = new WebSocket(wsUrl);
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            const candidate = {
+                __message_type__: MessageType.candidate,
+                ...event.candidate.toJSON(),
+            };
+            console.log("sending candidate", candidate);
+            ws.send(JSON.stringify(candidate));
+        }
+    };
+
+    const barC = pc.createDataChannel("bar");
+    barC.onopen = () => {
+        barC.send("hello from bar");
+    };
+
+    pc.ondatachannel = (event) => {
+        const c = event.channel;
+        event.channel.onmessage = (event) => {
+            console.log(c.label, "received", event.data);
+        };
+    };
+
+    ws.onopen = async () => {
+        console.log("ws open");
+
+        const offerDescription = await pc.createOffer();
+        await pc.setLocalDescription(offerDescription);
+        const offer = {
+            __message_type__: MessageType.offer,
+            ...offerDescription,
+        };
+
+        ws.send(JSON.stringify(offer));
+    };
+
+    ws.onmessage = async (event) => {
+        const message = JSON.parse(event.data);
+        switch (message.__message_type__) {
+            case MessageType.offer:
+                console.log("received offer", message);
+                await pc.setRemoteDescription(message);
+                if (pc.signalingState === "have-remote-offer" || pc.signalingState === "have-local-pranswer") {
+                    const answerDescription = await pc.createAnswer();
+                    await pc.setLocalDescription(answerDescription);
+                    ws.send(JSON.stringify(answerDescription));
+                }
+                break;
+            case MessageType.candidate:
+                console.log("received candidate", message);
+                await pc.addIceCandidate(message);
+                break;
+            default:
+                // check content
+                if ("sdp" in message && "type" in message) {
+                    // probably an answer
+                    console.log("received answer", message);
+                    await pc.setRemoteDescription(message);
+                } else if ("candidate" in message) {
+                    // probably a candidate
+                    console.log("received candidate", message);
+                    await pc.addIceCandidate(message);
+                } else {
+                    console.error("unknown message", message);
+                }
+        }
+    };
+
+    ws.onclose = () => {
+        console.log("ws close");
+    };
+</script>
+</body>
+</html>
+
