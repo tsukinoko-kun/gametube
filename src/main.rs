@@ -1,8 +1,8 @@
+use enigo::*;
 use std::env;
-use std::process::{Command, Child};
+use std::process::{Child, Command};
 use std::thread;
 use std::time::Duration;
-use enigo::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -34,11 +34,12 @@ fn launch_application(path: &str) -> Result<Child, std::io::Error> {
 }
 
 fn wait_for_window() -> Result<(), Box<dyn std::error::Error>> {
-    let mut enigo = Enigo::new(&Settings {
+    let enigo = Enigo::new(&Settings {
         ..Default::default()
     })?;
 
-    for _ in 0..60 { // Try for 60 seconds
+    for _ in 0..60 {
+        // Try for 60 seconds
         if let Ok((_, _)) = enigo.location() {
             return Ok(());
         }
