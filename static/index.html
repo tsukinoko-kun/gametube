@@ -73,7 +73,7 @@
         switch (message.__message_type__) {
             case MessageType.offer:
                 console.log("received offer", message);
-                await pc.setRemoteDescription(message);
+                await pc.setRemoteDescription(new RTCSessionDescription(message));
                 if (pc.signalingState === "have-remote-offer" || pc.signalingState === "have-local-pranswer") {
                     const answerDescription = await pc.createAnswer();
                     await pc.setLocalDescription(answerDescription);
@@ -89,7 +89,7 @@
                 if ("sdp" in message && "type" in message) {
                     // probably an answer
                     console.log("received answer", message);
-                    await pc.setRemoteDescription(message);
+                    await pc.setRemoteDescription(new RTCSessionDescription(message));
                 } else if ("candidate" in message) {
                     // probably a candidate
                     console.log("received candidate", message);
