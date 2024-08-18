@@ -27,7 +27,7 @@
 
     const wsUrl = new URL(window.location.href);
     wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
-    wsUrl.pathname = "/ws";
+    wsUrl.pathname = "/signaling";
     wsUrl.hash = "";
     wsUrl.search = "";
     const ws = new WebSocket(wsUrl);
