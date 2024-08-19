@@ -58,7 +58,8 @@ func Parse(data []byte) (messageType MessageType, offer *webrtc.SessionDescripti
 }
 
 func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) (*sync.WaitGroup, error) {
-	config := webrtc.Configuration{
+	var err error
+	peerConnection, err = webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
 				URLs: []string{
@@ -67,10 +68,7 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) (*
 				},
 			},
 		},
-	}
-
-	var err error
-	peerConnection, err = webrtc.NewPeerConnection(config)
+	})
 	if err != nil {
 		return nil, errors.Join(errors.New("failed to create peer connection"), err)
 	}
@@ -81,6 +79,10 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) (*
 		}
 		log.Debug("new ICE candidate")
 		onICECandidate(AnswerCandidate(c.ToJSON()))
+	})
+
+	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		log.Debug("connection state changed", "state", s)
 	})
 
 	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
@@ -109,24 +111,62 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) (*
 	}
 }
 
+func createPeerConnection() (*webrtc.PeerConnection, error) {
+	// Create a MediaEngine object to configure the supported codec
+	m := &webrtc.MediaEngine{}
+
+	// Setup the codecs you want to use.
+	// We'll use a H264 codec
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType:        96,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		return nil, err
+	}
+
+	// Create a new RTCPeerConnection
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+
+	peerConnectionConfig := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{
+				URLs: []string{
+					"stun:stun1.l.google.com:19302",
+					"stun:stun2.l.google.com:19302",
+				},
+			},
+		},
+	}
+
+	return api.NewPeerConnection(peerConnectionConfig)
+}
+
 func HandleOffer(offer *webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
 	if peerConnection == nil {
 		return nil, errors.New("peer connection not initialized")
 	}
 
+	log.Debug("handling offer", "sdp", offer.SDP)
+
 	err := peerConnection.SetRemoteDescription(*offer)
 	if err != nil {
 		return nil, errors.Join(errors.New("failed to set remote description"), err)
+	} else {
+		log.Debug("remote description is set")
 	}
 
 	answer, err := peerConnection.CreateAnswer(nil)
 	if err != nil {
 		return nil, errors.Join(errors.New("failed to create answer"), err)
+	} else {
+		log.Debug("created answer")
 	}
 
 	err = peerConnection.SetLocalDescription(answer)
 	if err != nil {
 		return nil, errors.Join(errors.New("failed to set local description"), err)
+	} else {
+		log.Debug("local description is set")
 	}
 
 	return &answer, nil
@@ -140,6 +180,8 @@ func HandleCandidate(candidate *webrtc.ICECandidateInit) error {
 	err := peerConnection.AddICECandidate(*candidate)
 	if err != nil {
 		return errors.Join(errors.New("failed to add ICE candidate"), err)
+	} else {
+		log.Debug("added ICE candidate")
 	}
 
 	return nil

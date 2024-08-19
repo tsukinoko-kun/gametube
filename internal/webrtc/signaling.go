@@ -21,13 +21,13 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func(conn *websocket.Conn) {
 		err := conn.Close()
-		log.Debug("WebSocket connection closed")
+		log.Debug("websocket connection closed")
 		if err != nil {
 			log.Error("failed to close connection", "err", err)
 		}
 	}(conn)
 
-	log.Debug("WebSocket connection established")
+	log.Debug("websocket connection established")
 
 	wg, err := InitializePeerConnection(func(c AnswerCandidate) {
 		response, err := json.Marshal(c)
@@ -65,7 +65,7 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 			answer, err := HandleOffer(offer)
 			if err != nil {
 				log.Error("failed to handle offer", "err", err)
-				continue
+				return
 			}
 
 			response, err := json.Marshal(map[string]interface{}{
@@ -81,6 +81,8 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 			if err := conn.WriteMessage(websocket.TextMessage, response); err != nil {
 				log.Error("failed to send answer", "err", err)
 				return
+			} else {
+				log.Debug("sent answer", "sdp", answer.SDP)
 			}
 
 		case MessageTypeCandidate:

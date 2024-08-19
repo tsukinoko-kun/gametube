@@ -16,10 +16,23 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
+	var gameBinary string
+
+	switch len(os.Args) {
+	case 2:
+		gameBinary = os.Args[1]
+	case 3:
+		gameBinary = os.Args[1]
+		switch os.Args[2] {
+		case "--debug":
+			log.SetLevel(log.DebugLevel)
+		default:
+			log.Fatal("usage: host <game> [options]")
+		}
+	default:
 		log.Fatal("usage: host <game>")
 	}
-	gameBinary := os.Args[1]
+
 	g := game.New(gameBinary, filepath.Dir(gameBinary))
 	if err := g.Start(); err != nil {
 		log.Fatal("failed to start game", "err", err)
@@ -53,21 +66,21 @@ func main() {
 		err := srv.Serve(ln)
 		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
-				log.Info("Server shutdown complete")
+				log.Info("server shutdown complete")
 			} else {
-				log.Error("Server error", "err", err)
+				log.Error("server error", "err", err)
 			}
 		}
 	}()
 
 	<-killSig
-	log.Info("Shutting down server")
+	log.Info("shutting down server")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Error("Server shutdown failed", "err", err)
+		log.Error("server shutdown failed", "err", err)
 	}
 
 	if err := g.Stop(); err != nil {
