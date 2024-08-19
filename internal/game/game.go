@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/charmbracelet/log"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -13,13 +14,22 @@ type Game struct {
 	cmd *exec.Cmd
 }
 
-func New(bin string, dir string) Game {
-	g := Game{cmd: exec.Command(bin)}
+func New(bin string, dir string) *Game {
+	g := &Game{cmd: exec.Command(bin)}
 	g.cmd.Dir = dir
 	return g
 }
 
+func (g *Game) Binary() string {
+	return g.cmd.Path
+}
+
+func (g *Game) Dir() string {
+	return g.cmd.Dir
+}
+
 func (g *Game) Start() error {
+	log.Info("starting game", "binary", g.Binary(), "dir", g.Dir())
 	return g.cmd.Start()
 }
 
@@ -31,11 +41,16 @@ func (g *Game) Stop() error {
 		return nil
 	}
 
+	log.Info("stopping game process", "pid", g.cmd.Process.Pid, "binary", g.Binary())
+
 	signals := []syscall.Signal{syscall.SIGTERM, syscall.SIGKILL}
 
 	for _, sig := range signals {
 		// send the signal
 		if err := g.cmd.Process.Signal(sig); err != nil {
+			if errors.Is(err, os.ErrProcessDone) {
+				return nil
+			}
 			return errors.Join(fmt.Errorf("failed to send signal %s", sig), err)
 		}
 

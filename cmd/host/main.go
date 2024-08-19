@@ -16,26 +16,24 @@ import (
 )
 
 func main() {
-	var gameBinary string
+	var g *game.Game
 
-	switch len(os.Args) {
-	case 2:
-		gameBinary = os.Args[1]
-	case 3:
-		gameBinary = os.Args[1]
-		switch os.Args[2] {
+	for _, arg := range os.Args[1:] {
+		switch arg {
 		case "--debug":
 			log.SetLevel(log.DebugLevel)
 		default:
-			log.Fatal("usage: host <game> [options]")
+			if g != nil {
+				log.Fatal("game binary already set", "new", arg, "old", g.Binary())
+			}
+			if _, err := os.Stat(arg); os.IsNotExist(err) {
+				log.Fatal("game binary not found", "path", arg)
+			}
+			g = game.New(arg, filepath.Dir(arg))
+			if err := g.Start(); err != nil {
+				log.Fatal("failed to start game", "err", err)
+			}
 		}
-	default:
-		log.Fatal("usage: host <game>")
-	}
-
-	g := game.New(gameBinary, filepath.Dir(gameBinary))
-	if err := g.Start(); err != nil {
-		log.Fatal("failed to start game", "err", err)
 	}
 
 	killSig := make(chan os.Signal, 1)
@@ -83,7 +81,9 @@ func main() {
 		log.Error("server shutdown failed", "err", err)
 	}
 
-	if err := g.Stop(); err != nil {
-		log.Error("failed to stop game", "err", err)
+	if g != nil {
+		if err := g.Stop(); err != nil {
+			log.Error("failed to stop game", "err", err)
+		}
 	}
 }
