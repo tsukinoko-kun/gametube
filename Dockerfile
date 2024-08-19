@@ -1,19 +1,32 @@
+FROM golang:latest as build
+WORKDIR /gametube
+COPY go.mod /gametube/go.mod
+COPY go.sum /gametube/go.sum
+COPY cmd /gametube/cmd
+COPY internal /gametube/internal
+COPY static /gametube/static
+RUN go build -o /gametube/bin/host ./cmd/host
+
 # Start with Ubuntu as the base image
-FROM ubuntu:22.04 AS base
+FROM ubuntu:latest AS ubuntu-gui
 
 # Avoid prompts from apt
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update and install basic utilities
-RUN apt-get update && apt-get install -y \
+# Update
+RUN apt-get update
+
+# Install basic utilities
+RUN apt-get install -y \
     wget \
     curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates
+
+# Install build tools
+RUN apt-get install -y pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
 # Install X11 and audio libraries
-FROM base AS x11
-RUN apt-get update && apt-get install -y \
+RUN apt-get install -y \
     xvfb \
     x11vnc \
     xdotool \
@@ -24,63 +37,28 @@ RUN apt-get update && apt-get install -y \
     # PulseAudio for audio support
     pulseaudio \
     # OpenGL libraries for 3D acceleration
-    libgl1-mesa-glx \
     libgl1-mesa-dri \
-    && rm -rf /var/lib/apt/lists/*
+    mesa-utils libglu1-mesa-dev freeglut3-dev mesa-common-dev \
+    libglew-dev libglfw3-dev libglm-dev libao-dev libmpg123-dev
 
 # Install lightweight window manager and desktop environment
-FROM x11 AS gui
-RUN apt-get update && apt-get install -y \
+RUN apt-get install -y \
     # Openbox as a lightweight window manager
     openbox \
     # LXQt as a lightweight desktop environment
-    lxqt \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Rust and required dependencies
-FROM gui AS rust
-
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    pkg-config \
-    libx11-dev \
-    libxext-dev \
-    libxft-dev \
-    libxinerama-dev \
-    libxcursor-dev \
-    libxrender-dev \
-    libxfixes-dev \
-    libxdo-dev \
-    libssl-dev \
-    ffmpeg
-
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Set up the working directory
-WORKDIR /gametube
-
-# Copy your Rust project files (assuming they're in the same directory as the Dockerfile)
-COPY Cargo.toml ./Cargo.toml
-COPY Cargo.lock ./Cargo.lock
-COPY src ./src
-
-# Build the Rust project
-RUN cargo build --release
-
-FROM rust AS gametube
-
-WORKDIR /gametube
-
-# Set up the entrypoint
-COPY entrypoint.sh /gametube/entrypoint.sh
-RUN chmod +x /gametube/entrypoint.sh
+    lxqt
 
 # Set the virtual display resolution and color depth
 ENV DISPLAY=:99
 ENV RESOLUTION=1920x1080
 ENV COLOR_DEPTH=24
 
-# Set the entrypoint
+FROM ubuntu-gui AS gametube
+
+# Set up the entrypoint
+COPY --from=build /gametube/bin/host /gametube/host
+COPY entrypoint.sh /gametube/entrypoint.sh
+RUN chmod +x /gametube/entrypoint.sh
+
+# Start gametube
 ENTRYPOINT ["/gametube/entrypoint.sh"]

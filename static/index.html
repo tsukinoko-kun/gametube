@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>gametube</title>
+    <style>
+        :root {
+            background-color: darkslategray;
+        }
+
+        body {
+            height: 100dvh;
+            width: 100dvw;
+            overflow: hidden;
+        }
+
+        * {
+            box-sizing: border-box;
+            padding: 0;
+            margin: 0;
+            user-select: none;
+        }
+
+        video {
+            display: block;
+            max-height: 100dvh;
+            max-width: 100dvw;
+            border: 2px solid red;
+        }
+    </style>
+</head>
+<body>
+<main id="app">
+    <video autoplay id="remoteVideo" muted playsinline></video>
+</main>
+<script defer>
+    console.log("VP9 support:", RTCRtpReceiver.getCapabilities("video").codecs.some(codec => codec.mimeType === "video/VP9"));
+    console.log("H264 support:", RTCRtpReceiver.getCapabilities("video").codecs.some(codec => codec.mimeType === "video/H264"));
+
+    const MessageType = {
+        unknown: 0,
+        offer: 1,
+        candidate: 2,
+    };
+
+    const videoElement = document.getElementById("remoteVideo");
+    if (!videoElement) {
+        throw new Error("video element not found");
+    }
+
+    videoElement.addEventListener("loadedmetadata", () => {
+        console.log("Video metadata loaded", {
+            videoWidth: videoElement.videoWidth,
+            videoHeight: videoElement.videoHeight,
+            readyState: videoElement.readyState
+        });
+    });
+    videoElement.addEventListener("playing", () => {
+        console.log("Video playback started");
+    });
+    videoElement.addEventListener("stalled", () => {
+        console.log("Video playback stalled");
+    });
+    videoElement.addEventListener("error", (e) => {
+        console.error("Video error:", videoElement.error);
+    });
+
+    const configuration = {
+        bundlePolicy: "max-bundle",
+        iceServers: [
+            {
+                urls: [
+                    "stun:stun1.l.google.com:19302",
+                    "stun:stun2.l.google.com:19302",
+                ],
+            },
+        ],
+        iceCandidatePoolSize: 10,
+    };
+    const peerConnection = new RTCPeerConnection(configuration);
+    peerConnection.addTransceiver("video", {direction: "recvonly"});
+
+    const barC = peerConnection.createDataChannel("bar");
+    barC.onopen = () => {
+        barC.send("hello from bar");
+    };
+
+    const wsUrl = new URL(window.location.href);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    wsUrl.pathname = "/signaling";
+    wsUrl.hash = "";
+    wsUrl.search = "";
+    const ws = new WebSocket(wsUrl);
+
+    peerConnection.oniceconnectionstatechange = function () {
+        console.log("ICE Connection State:", peerConnection.iceConnectionState);
+    };
+
+    peerConnection.onconnectionstatechange = function () {
+        console.log("Connection State:", peerConnection.connectionState);
+    };
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            const candidate = {
+                __message_type__: MessageType.candidate,
+                ...event.candidate.toJSON(),
+            };
+            console.debug("sending candidate", candidate);
+            ws.send(JSON.stringify(candidate));
+        }
+    };
+
+    peerConnection.ontrack = async (event) => {
+        console.log("Track received:", event.track.kind, event.track.id, event.track.readyState);
+        console.log("Video track constraints:", event.track.getConstraints());
+
+        if (event.streams.length === 0) {
+            console.warn("received empty stream (no tracks)");
+            return;
+        }
+
+        try {
+            // if (videoElement.srcObject) {
+            //     console.log("adding track to existing stream");
+            //     videoElement.srcObject.addTrack(event.track);
+            // } else {
+            console.log("creating new stream with received track");
+            videoElement.srcObject = new MediaStream([event.track]);
+            // }
+            console.log("successful");
+            console.log("Starting video playback");
+            try {
+                await videoElement.play()
+                console.log("Video playback started");
+            }
+            catch (e){
+                console.error("Error playing video:", e);
+            }
+
+            setInterval(() => {
+                peerConnection.getStats(event.track).then(stats => {
+                    stats.forEach(report => {
+                        if (report.type === "inbound-rtp" && report.kind === "video") {
+                            console.log("decoded frames:", report.framesDecoded);
+                        } else {
+                            console.log("track status report:", "report type:", report.type, "kind:", report.kind, report);
+                        }
+                    });
+                });
+            }, 1000);
+        } catch (e) {
+            console.error("failed to add track to stream", e);
+        } finally {
+            console.debug("video element source set:", videoElement.srcObject);
+
+            setTimeout(() => {
+                peerConnection.getReceivers().forEach(receiver => {
+                    if (receiver.track.kind === "video") {
+                        console.log("Selected video codec:", receiver.getParameters().codecs[0]);
+                    }
+                });
+            }, 1000);
+        }
+    };
+
+    peerConnection.ondatachannel = (event) => {
+        const c = event.channel;
+        event.channel.onmessage = (event) => {
+            console.log(c.label, "received", event.data);
+        };
+    };
+
+    ws.onopen = async () => {
+        console.debug("ws open");
+        const offerDescription = await peerConnection.createOffer();
+        console.debug("created offer", offerDescription);
+        await peerConnection.setLocalDescription(offerDescription);
+        const offer = {
+            __message_type__: MessageType.offer,
+            ...offerDescription,
+        };
+
+        ws.send(JSON.stringify(offer));
+        console.debug("sent offer");
+    };
+
+    ws.onmessage = async (event) => {
+        console.debug("ws message", event.data);
+        const message = JSON.parse(event.data);
+        switch (message.__message_type__) {
+            case MessageType.offer:
+                console.debug("received offer answer", message, "sdp:", message.sdp);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+                if (peerConnection.signalingState === "have-remote-offer" || peerConnection.signalingState === "have-local-pranswer") {
+                    const answerDescription = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answerDescription);
+                    ws.send(JSON.stringify(answerDescription));
+                }
+                break;
+            case MessageType.candidate:
+                console.debug("received candidate", message);
+                await peerConnection.addIceCandidate(message);
+                break;
+            default:
+                // check content
+                if ("sdp" in message && "type" in message) {
+                    // probably an answer
+                    console.debug("received offer answer", message, "sdp:", message.sdp);
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+                } else if ("candidate" in message) {
+                    // probably a candidate
+                    console.debug("received candidate", message);
+                    await peerConnection.addIceCandidate(message);
+                } else {
+                    console.error("unknown message", message);
+                }
+        }
+    };
+
+    ws.onclose = () => {
+        console.debug("ws close");
+    };
+</script>
+<script defer>
+    // const userInputEventNames = ["click", "contextmenu", "auxclick", "dblclick", "mousedown", "mouseup", "pointerup", "touchend", "keydown", "keyup"];
+    //
+    // function unmuteVideos() {
+    //     const videoEls = document.querySelectorAll("video[muted]");
+    //     for (const videoEl of Array.from(videoEls)) {
+    //         if (videoEl.srcObject) {
+    //             videoEl.muted = false;
+    //         }
+    //     }
+    // }
+    //
+    // for (const eventName of userInputEventNames) {
+    //     document.addEventListener(eventName, unmuteVideos);
+    // }
+</script>
+</body>
+</html>
+
