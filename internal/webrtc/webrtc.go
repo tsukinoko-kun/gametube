@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/charmbracelet/log"
 	"github.com/pion/webrtc/v4"
+	"github.com/tsukinoko-kun/gametube/internal/stream"
+	"sync"
 )
 
 var (
@@ -55,7 +57,7 @@ func Parse(data []byte) (messageType MessageType, offer *webrtc.SessionDescripti
 	}
 }
 
-func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) error {
+func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) (*sync.WaitGroup, error) {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -70,7 +72,7 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) er
 	var err error
 	peerConnection, err = webrtc.NewPeerConnection(config)
 	if err != nil {
-		return errors.Join(errors.New("failed to create peer connection"), err)
+		return nil, errors.Join(errors.New("failed to create peer connection"), err)
 	}
 
 	peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
@@ -91,7 +93,7 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) er
 	})
 
 	if d, err := peerConnection.CreateDataChannel("foo", nil); err != nil {
-		return errors.Join(errors.New("failed to create data channel"), err)
+		return nil, errors.Join(errors.New("failed to create data channel"), err)
 	} else {
 		d.OnOpen(func() {
 			if err := d.SendText("hello from foo"); err != nil {
@@ -99,7 +101,12 @@ func InitializePeerConnection(onICECandidate func(candidate AnswerCandidate)) er
 			}
 		})
 	}
-	return nil
+
+	if wg, err := stream.StartVideoStream(peerConnection); err != nil {
+		return nil, errors.Join(errors.New("failed to start video stream"), err)
+	} else {
+		return wg, nil
+	}
 }
 
 func HandleOffer(offer *webrtc.SessionDescription) (*webrtc.SessionDescription, error) {

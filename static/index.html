@@ -2,15 +2,72 @@
 <html lang="en">
 <head>
     <title>gametube</title>
+    <style>
+        :root {
+            background-color: #000;
+        }
+        body {
+            height: 100dvh;
+            width: 100dvw;
+            overflow: hidden;
+        }
+        * {
+            box-sizing: border-box;
+            padding: 0;
+            margin: 0;
+            user-select: none;
+        }
+        #app {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+        }
+        video {
+            max-height: 100dvh;
+            max-width: 100dvw;
+        }
+    </style>
 </head>
 <body>
-<video autoplay id="remoteVideo"></video>
-<script>
+<main id="app"></main>
+<script defer>
     const MessageType = {
         unknown: 0,
         offer: 1,
         candidate: 2,
     };
+
+    const appEl = document.getElementById("app");
+
+    const _remoteStreams = new Map();
+
+    /**
+     * @param {string} id
+     * @returns {MediaStream}
+     */
+    function remoteStream(id) {
+        if (!_remoteStreams.has(id)) {
+            const remoteStream = new MediaStream();
+            _remoteStreams.set(id, remoteStream);
+            const videoEl = document.createElement("video");
+            videoEl.autoplay = true;
+            videoEl.controls = false;
+            videoEl.playsInline = true;
+            videoEl.muted = true;
+            videoEl.id = `remoteVideo-${id}`;
+            videoEl.srcObject = remoteStream;
+            appEl.appendChild(videoEl);
+        }
+        return _remoteStreams.get(id);
+    }
+
+    /**
+     * @param {MediaStream} s
+     * @param {MediaStreamTrack} track
+     */
+    function addRemoteTrack(s, track) {
+        remoteStream(s.id).addTrack(track);
+    }
 
     const configuration = {
         iceServers: [
@@ -38,8 +95,19 @@
                 __message_type__: MessageType.candidate,
                 ...event.candidate.toJSON(),
             };
-            console.log("sending candidate", candidate);
+            console.debug("sending candidate", candidate);
             ws.send(JSON.stringify(candidate));
+        }
+    };
+
+    pc.ontrack = (event) => {
+        console.log("ontrack", event);
+        for (const s of event.streams) {
+            console.log("ontrack stream", s.id);
+            const ms = remoteStream(s.id);
+            for (const t of s.getTracks()) {
+                ms.addTrack(t);
+            }
         }
     };
 
@@ -56,7 +124,7 @@
     };
 
     ws.onopen = async () => {
-        console.log("ws open");
+        console.debug("ws open");
 
         const offerDescription = await pc.createOffer();
         await pc.setLocalDescription(offerDescription);
@@ -72,7 +140,7 @@
         const message = JSON.parse(event.data);
         switch (message.__message_type__) {
             case MessageType.offer:
-                console.log("received offer", message);
+                console.debug("received offer", message);
                 await pc.setRemoteDescription(new RTCSessionDescription(message));
                 if (pc.signalingState === "have-remote-offer" || pc.signalingState === "have-local-pranswer") {
                     const answerDescription = await pc.createAnswer();
@@ -81,18 +149,18 @@
                 }
                 break;
             case MessageType.candidate:
-                console.log("received candidate", message);
+                console.debug("received candidate", message);
                 await pc.addIceCandidate(message);
                 break;
             default:
                 // check content
                 if ("sdp" in message && "type" in message) {
                     // probably an answer
-                    console.log("received answer", message);
+                    console.debug("received answer", message);
                     await pc.setRemoteDescription(new RTCSessionDescription(message));
                 } else if ("candidate" in message) {
                     // probably a candidate
-                    console.log("received candidate", message);
+                    console.debug("received candidate", message);
                     await pc.addIceCandidate(message);
                 } else {
                     console.error("unknown message", message);
@@ -101,8 +169,38 @@
     };
 
     ws.onclose = () => {
-        console.log("ws close");
+        console.debug("ws close");
     };
+</script>
+<script defer>
+    const userInputEventNames = ["click", "contextmenu", "auxclick", "dblclick", "mousedown", "mouseup", "pointerup", "touchend", "keydown", "keyup"];
+
+    function unmuteVideos() {
+        const videoEls = document.querySelectorAll("video[muted]");
+        for (const videoEl of Array.from(videoEls)) {
+            videoEl.muted = false;
+        }
+    }
+
+    for (const eventName of userInputEventNames) {
+        document.addEventListener(eventName, unmuteVideos);
+    }
+
+    function updateVideoSize() {
+        const videoEls = Array.from(document.querySelectorAll("video"));
+        const count = videoEls.length;
+        const videosPerRow = Math.ceil(Math.sqrt(count));
+        const rows = Math.ceil(count / videosPerRow);
+        const width = 100 / videosPerRow;
+        const height = 100 / rows;
+        for (const videoEl of Array.from(videoEls)) {
+            videoEl.style.width = `${width}dvw`;
+            videoEl.style.height = `${height}dvh`;
+        }
+    }
+
+    window.addEventListener("resize", updateVideoSize);
+    window.addEventListener("load", updateVideoSize);
 </script>
 </body>
 </html>

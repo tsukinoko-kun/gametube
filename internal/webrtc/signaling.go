@@ -29,7 +29,7 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug("WebSocket connection established")
 
-	if err := InitializePeerConnection(func(c AnswerCandidate) {
+	wg, err := InitializePeerConnection(func(c AnswerCandidate) {
 		response, err := json.Marshal(c)
 		if err != nil {
 			log.Error("failed to marshal ICE candidate", "err", err)
@@ -39,10 +39,12 @@ func SignalingHandler(w http.ResponseWriter, r *http.Request) {
 		if err := conn.WriteMessage(websocket.TextMessage, response); err != nil {
 			log.Error("failed to send ICE candidate", "err", err)
 		}
-	}); err != nil {
+	})
+	if err != nil {
 		log.Error("failed to initialize peer connection", "err", err)
 		return
 	}
+	defer wg.Done()
 
 	for {
 		_, p, err := conn.ReadMessage()
