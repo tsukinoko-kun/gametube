@@ -5,6 +5,7 @@ COPY go.sum /gametube/go.sum
 COPY cmd /gametube/cmd
 COPY internal /gametube/internal
 COPY static /gametube/static
+RUN apt-get update && apt-get install -y libx264-dev
 RUN go build -o /gametube/bin/host ./cmd/host
 
 # Start with Ubuntu as the base image
@@ -23,7 +24,7 @@ RUN apt-get install -y \
     ca-certificates
 
 # Install build tools
-RUN apt-get install -y pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+RUN apt-get install -y pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libx264-dev
 
 # Install X11 and audio libraries
 RUN apt-get install -y \

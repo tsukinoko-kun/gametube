@@ -5,7 +5,7 @@ import (
 	"errors"
 	"github.com/charmbracelet/log"
 	"github.com/tsukinoko-kun/gametube/internal/game"
-	"github.com/tsukinoko-kun/gametube/internal/webrtc"
+	"github.com/tsukinoko-kun/gametube/internal/stream"
 	"github.com/tsukinoko-kun/gametube/static"
 	"net"
 	"net/http"
@@ -39,7 +39,7 @@ func main() {
 	killSig := make(chan os.Signal, 1)
 	signal.Notify(killSig, os.Interrupt, os.Kill)
 
-	http.HandleFunc("/signaling", webrtc.SignalingHandler)
+	http.HandleFunc("/ws", stream.HandleWebSocket)
 	http.HandleFunc("/", static.IndexHandler)
 
 	srv := &http.Server{

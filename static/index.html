@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <title>gametube</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <style>
         :root {
             background-color: darkslategray;
@@ -33,14 +34,11 @@
     <video autoplay id="remoteVideo" muted playsinline></video>
 </main>
 <script defer>
-    console.log("VP9 support:", RTCRtpReceiver.getCapabilities("video").codecs.some(codec => codec.mimeType === "video/VP9"));
-    console.log("H264 support:", RTCRtpReceiver.getCapabilities("video").codecs.some(codec => codec.mimeType === "video/H264"));
-
-    const MessageType = {
-        unknown: 0,
-        offer: 1,
-        candidate: 2,
-    };
+    const h264Support = RTCRtpReceiver.getCapabilities("video").codecs.some(codec => codec.mimeType === "video/H264");
+    if (!h264Support) {
+        alert("H.264 codec not supported");
+        throw new Error("H.264 codec not supported");
+    }
 
     const videoElement = document.getElementById("remoteVideo");
     if (!videoElement) {
@@ -64,162 +62,36 @@
         console.error("Video error:", videoElement.error);
     });
 
-    const configuration = {
-        bundlePolicy: "max-bundle",
-        iceServers: [
-            {
-                urls: [
-                    "stun:stun1.l.google.com:19302",
-                    "stun:stun2.l.google.com:19302",
-                ],
-            },
-        ],
-        iceCandidatePoolSize: 10,
-    };
-    const peerConnection = new RTCPeerConnection(configuration);
-    peerConnection.addTransceiver("video", {direction: "recvonly"});
+    const mediaSource = new MediaSource();
+    videoElement.src = URL.createObjectURL(mediaSource);
 
-    const barC = peerConnection.createDataChannel("bar");
-    barC.onopen = () => {
-        barC.send("hello from bar");
-    };
+    mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+        const wsUrl = new URL(window.location.href);
+        wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+        wsUrl.pathname = "/ws";
+        wsUrl.hash = "";
+        wsUrl.search = "";
+        const ws = new WebSocket(wsUrl);
 
-    const wsUrl = new URL(window.location.href);
-    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
-    wsUrl.pathname = "/signaling";
-    wsUrl.hash = "";
-    wsUrl.search = "";
-    const ws = new WebSocket(wsUrl);
+        ws.onclose = () => {
+            console.debug("ws close");
+        };
 
-    peerConnection.oniceconnectionstatechange = function () {
-        console.log("ICE Connection State:", peerConnection.iceConnectionState);
-    };
+        ws.binaryType = 'arraybuffer';
 
-    peerConnection.onconnectionstatechange = function () {
-        console.log("Connection State:", peerConnection.connectionState);
-    };
-
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            const candidate = {
-                __message_type__: MessageType.candidate,
-                ...event.candidate.toJSON(),
-            };
-            console.debug("sending candidate", candidate);
-            ws.send(JSON.stringify(candidate));
-        }
-    };
-
-    peerConnection.ontrack = async (event) => {
-        console.log("Track received:", event.track.kind, event.track.id, event.track.readyState);
-        console.log("Video track constraints:", event.track.getConstraints());
-
-        if (event.streams.length === 0) {
-            console.warn("received empty stream (no tracks)");
-            return;
-        }
-
-        try {
-            // if (videoElement.srcObject) {
-            //     console.log("adding track to existing stream");
-            //     videoElement.srcObject.addTrack(event.track);
-            // } else {
-            console.log("creating new stream with received track");
-            videoElement.srcObject = new MediaStream([event.track]);
-            // }
-            console.log("successful");
-            console.log("Starting video playback");
+        ws.onmessage = (event) => {
             try {
-                await videoElement.play()
-                console.log("Video playback started");
+                sourceBuffer.appendBuffer(event.data);
+            } catch (e) {
+                console.error('Error appending buffer:', e);
             }
-            catch (e){
-                console.error("Error playing video:", e);
-            }
-
-            setInterval(() => {
-                peerConnection.getStats(event.track).then(stats => {
-                    stats.forEach(report => {
-                        if (report.type === "inbound-rtp" && report.kind === "video") {
-                            console.log("decoded frames:", report.framesDecoded);
-                        } else {
-                            console.log("track status report:", "report type:", report.type, "kind:", report.kind, report);
-                        }
-                    });
-                });
-            }, 1000);
-        } catch (e) {
-            console.error("failed to add track to stream", e);
-        } finally {
-            console.debug("video element source set:", videoElement.srcObject);
-
-            setTimeout(() => {
-                peerConnection.getReceivers().forEach(receiver => {
-                    if (receiver.track.kind === "video") {
-                        console.log("Selected video codec:", receiver.getParameters().codecs[0]);
-                    }
-                });
-            }, 1000);
-        }
-    };
-
-    peerConnection.ondatachannel = (event) => {
-        const c = event.channel;
-        event.channel.onmessage = (event) => {
-            console.log(c.label, "received", event.data);
-        };
-    };
-
-    ws.onopen = async () => {
-        console.debug("ws open");
-        const offerDescription = await peerConnection.createOffer();
-        console.debug("created offer", offerDescription);
-        await peerConnection.setLocalDescription(offerDescription);
-        const offer = {
-            __message_type__: MessageType.offer,
-            ...offerDescription,
         };
 
-        ws.send(JSON.stringify(offer));
-        console.debug("sent offer");
-    };
-
-    ws.onmessage = async (event) => {
-        console.debug("ws message", event.data);
-        const message = JSON.parse(event.data);
-        switch (message.__message_type__) {
-            case MessageType.offer:
-                console.debug("received offer answer", message, "sdp:", message.sdp);
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-                if (peerConnection.signalingState === "have-remote-offer" || peerConnection.signalingState === "have-local-pranswer") {
-                    const answerDescription = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answerDescription);
-                    ws.send(JSON.stringify(answerDescription));
-                }
-                break;
-            case MessageType.candidate:
-                console.debug("received candidate", message);
-                await peerConnection.addIceCandidate(message);
-                break;
-            default:
-                // check content
-                if ("sdp" in message && "type" in message) {
-                    // probably an answer
-                    console.debug("received offer answer", message, "sdp:", message.sdp);
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-                } else if ("candidate" in message) {
-                    // probably a candidate
-                    console.debug("received candidate", message);
-                    await peerConnection.addIceCandidate(message);
-                } else {
-                    console.error("unknown message", message);
-                }
-        }
-    };
-
-    ws.onclose = () => {
-        console.debug("ws close");
-    };
+        ws.onerror = (error) => {
+            console.error('WebSocket Error:', error);
+        };
+    });
 </script>
 <script defer>
     // const userInputEventNames = ["click", "contextmenu", "auxclick", "dblclick", "mousedown", "mouseup", "pointerup", "touchend", "keydown", "keyup"];
