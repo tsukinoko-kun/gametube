@@ -1,0 +1,27 @@
+{
+	"name": "gametube",
+	"scripts": {
+		"build": "postcss ./view/style.css --dir public",
+		"dev": "postcss ./view/style.css --dir public --watch",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"autoprefixer": "^10.4.20",
+		"cssnano": "^7.0.6",
+		"postcss": "^8.4.45",
+		"postcss-cli": "^11.0.0",
+		"prettier": "^3.3.3",
+		"prettier-plugin-tailwindcss": "^0.6.6",
+		"tailwindcss": "^3.4.11"
+	},
+	"prettier": {
+		"singleQuote": false,
+		"semi": false,
+		"tabWidth": 4,
+		"useTabs": true,
+		"trailingComma": "all",
+		"plugins": [
+			"prettier-plugin-tailwindcss"
+		]
+	}
+}

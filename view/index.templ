@@ -1,0 +1,23 @@
+package view
+
+import (
+	"github.com/tsukinoko-kun/gametube/config"
+	"github.com/tsukinoko-kun/gametube/env"
+	"github.com/tsukinoko-kun/gametube/view/util"
+)
+
+templ index() {
+	@layout("Games") {
+		<h1 class="title">GameTube</h1>
+		<ul class="flex flex-row">
+			for _, game := range config.Data.Games {
+				<li class="block group">
+					<a class="block relative" href={ util.Join("/start", game.Slug) }>
+						<img class="block size-full" src={ env.Expand(game.Thumbnail) } alt={ game.Title }/>
+						<span class="hidden group-hover:block absolute bg-black bg-opacity-75 backdrop-blur-sm text-neutral-100 bottom-0 w-full p-2">{ game.Title }</span>
+					</a>
+				</li>
+			}
+		</ul>
+	}
+}

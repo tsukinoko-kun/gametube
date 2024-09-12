@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	color-scheme: dark;
+}
+
+@layer components {
+	.title {
+		@apply pb-8 text-4xl;
+	}
+}

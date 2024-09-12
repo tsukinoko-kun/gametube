@@ -1,0 +1,30 @@
+package view
+
+import "fmt"
+
+templ layout(title string) {
+	{{
+	var t string
+	if len(title) == 0 {
+		t = "GameTube"
+	} else {
+		t = fmt.Sprintf("GameTube - %s", title)
+	}
+	}}
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta content="width=device-width, initial-scale=1" name="viewport"/>
+			<meta name="darkreader-lock"/>
+			<title>{ t }</title>
+			<link href="/public/style.css" rel="stylesheet"/>
+			<link href="/public/favicon.svg" rel="icon" type="image/svg+xml"/>
+		</head>
+		<body>
+			<main class="p-2">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

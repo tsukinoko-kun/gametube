@@ -3,48 +3,54 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"github.com/charmbracelet/log"
-	"github.com/tsukinoko-kun/gametube/internal/game"
-	"github.com/tsukinoko-kun/gametube/internal/webrtc"
-	"github.com/tsukinoko-kun/gametube/static"
+	"github.com/tsukinoko-kun/gametube/env"
+	"github.com/tsukinoko-kun/gametube/game"
+	"github.com/tsukinoko-kun/gametube/view"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"time"
+
+	"github.com/tsukinoko-kun/gametube/public"
 )
 
-func main() {
-	var g *game.Game
+var (
+	addr string
+)
 
-	for _, arg := range os.Args[1:] {
-		switch arg {
-		case "--debug":
-			log.SetLevel(log.DebugLevel)
-		default:
-			if g != nil {
-				log.Fatal("game binary already set", "new", arg, "old", g.Binary())
-			}
-			if _, err := os.Stat(arg); os.IsNotExist(err) {
-				log.Fatal("game binary not found", "path", arg)
-			}
-			g = game.New(arg, filepath.Dir(arg))
-			if err := g.Start(); err != nil {
-				log.Fatal("failed to start game", "err", err)
-			}
-		}
+func init() {
+	if err := env.EnsureCommonEnv(); err != nil {
+		log.Fatal("failed to ensure common env variables", "err", err)
 	}
 
+	debug := flag.Bool("debug", false, "Enable debug logging")
+	port := flag.Uint("port", 0, "Port to listen to")
+	flag.Parse()
+
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
+	addr = fmt.Sprintf(":%d", *port)
+}
+
+func main() {
 	killSig := make(chan os.Signal, 1)
 	signal.Notify(killSig, os.Interrupt, os.Kill)
 
-	http.HandleFunc("/signaling", webrtc.SignalingHandler)
-	http.HandleFunc("/", static.IndexHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", view.IndexHandler)
+	mux.HandleFunc("/play", view.PlayHandler)
+	mux.HandleFunc("/start/{slug}", game.StartHandler)
+	mux.Handle("/public/", public.Handler)
 
 	srv := &http.Server{
-		Addr:    ":80",
-		Handler: http.DefaultServeMux,
+		Addr:    addr,
+		Handler: mux,
 	}
 
 	ln, err := net.Listen("tcp", srv.Addr)
@@ -79,11 +85,5 @@ func main() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Error("server shutdown failed", "err", err)
-	}
-
-	if g != nil {
-		if err := g.Stop(); err != nil {
-			log.Error("failed to stop game", "err", err)
-		}
 	}
 }

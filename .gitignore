@@ -1,2 +1,4 @@
-/target
+tmp
+public/style.css
 .DS_Store
+node_modules

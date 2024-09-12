@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/a-h/templ v0.2.778 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/lipgloss v0.12.1 // indirect
 	github.com/charmbracelet/log v0.4.0 // indirect
@@ -45,4 +46,5 @@ require (
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
