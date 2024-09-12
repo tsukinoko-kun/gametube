@@ -5,17 +5,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/charmbracelet/log"
-	"github.com/tsukinoko-kun/gametube/env"
-	"github.com/tsukinoko-kun/gametube/game"
-	"github.com/tsukinoko-kun/gametube/view"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/charmbracelet/log"
+
+	"github.com/tsukinoko-kun/gametube/env"
+	"github.com/tsukinoko-kun/gametube/game"
 	"github.com/tsukinoko-kun/gametube/public"
+	"github.com/tsukinoko-kun/gametube/view"
 )
 
 var (
@@ -40,12 +42,12 @@ func init() {
 
 func main() {
 	killSig := make(chan os.Signal, 1)
-	signal.Notify(killSig, os.Interrupt, os.Kill)
+	signal.Notify(killSig, os.Interrupt, syscall.SIGTERM)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", view.IndexHandler)
-	mux.HandleFunc("/play", view.PlayHandler)
 	mux.HandleFunc("/start/{slug}", game.StartHandler)
+	mux.HandleFunc("/play", view.PlayHandler)
 	mux.Handle("/public/", public.Handler)
 
 	srv := &http.Server{

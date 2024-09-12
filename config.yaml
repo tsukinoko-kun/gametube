@@ -3,6 +3,6 @@ games:
       title: Mageanoid
       thumbnail: https://shared.steamstatic.com/store_item_assets/steam/apps/3104840/header.jpg?t=$NOW
       source: /Users/frank/Git/mageanoid/pack
-      working_directory: /games/mageanoid/
+      working_directory: .
       entrypoint: ./mageanoid
       save: $XDG_CONFIG_HOME/mageanoid/

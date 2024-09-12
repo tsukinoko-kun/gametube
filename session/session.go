@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	NoSessionError = errors.New("no session")
+	ErrNoSession = errors.New("no session")
 )
 
 func generateSessionId() string {
@@ -30,7 +30,7 @@ func GetSessionId(w http.ResponseWriter, r *http.Request, create bool) (string, 
 			}
 			http.SetCookie(w, sessionCookie)
 		} else {
-			return "", NoSessionError
+			return "", ErrNoSession
 		}
 	}
 	return sessionCookie.Value, nil

@@ -2,9 +2,10 @@ package game
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/tsukinoko-kun/gametube/config"
 	"github.com/tsukinoko-kun/gametube/session"
-	"net/http"
 )
 
 var (
@@ -13,13 +14,7 @@ var (
 
 func getSlug(r *http.Request) (string, error) {
 	s := r.PathValue("slug")
-	found := false
-	for _, g := range config.Data.Games {
-		if g.Slug == s {
-			found = true
-			break
-		}
-	}
+	_, found := config.FindGame(s)
 	if found {
 		return s, nil
 	} else {
@@ -47,7 +42,12 @@ func StartHandler(w http.ResponseWriter, r *http.Request) {
 		activeGames[sessionId] = nil
 	}
 
-	g, err := newGame(slug)
+	g, err := newGame(r.Context(), sessionId, slug)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
 	activeGames[sessionId] = g
 
 	http.Redirect(w, r, "/play", http.StatusFound)

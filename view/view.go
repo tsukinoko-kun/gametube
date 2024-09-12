@@ -1,8 +1,10 @@
 package view
 
 import (
-	"github.com/tsukinoko-kun/gametube/session"
 	"net/http"
+
+	"github.com/tsukinoko-kun/gametube/game"
+	"github.com/tsukinoko-kun/gametube/session"
 )
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -18,5 +20,12 @@ func PlayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = play("", s).Render(r.Context(), w)
+	g, ok := game.GetGame(s)
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("no running game"))
+		return
+	}
+
+	_ = play(g, s).Render(r.Context(), w)
 }

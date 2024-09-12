@@ -1,7 +1,10 @@
 package view
 
-templ play(title string, session string) {
-	@layout(title) {
-		<h1 class="title">{ title } ({ session })</h1>
+import "github.com/tsukinoko-kun/gametube/game"
+
+templ play(g *game.Game, session string) {
+	@layout(g.Title()) {
+		<h1 class="title">{ g.Title() } ({ session })</h1>
+		<pre>{ g.Container.Log.String() }</pre>
 	}
 }
